@@ -66,14 +66,26 @@ test_expect_success 'apply --index create' '
 	git diff --exit-code
 '
 
-test_expect_success 'apply with no-contents and a funny pathname' '
+test_expect_success 'setup patches in dir ending in SP' '
+	test_when_finished "rm -fr \"funny \"" &&
 	mkdir "funny " &&
 	>"funny /empty" &&
 	git add "funny /empty" &&
-	git diff HEAD "funny /" >sample.patch &&
-	git diff -R HEAD "funny /" >elpmas.patch &&
+	git diff HEAD -- "funny /" >sample.patch &&
+	git diff -R HEAD -- "funny /" >elpmas.patch &&
 	git reset --hard &&
-	rm -fr "funny " &&
+
+	if  grep "a/funny /empty b/funny /empty" sample.patch &&
+	    grep "b/funny /empty a/funny /empty" elpmas.patch
+	then
+		test_set_prereq DIR_ENDS_WITH_SP
+	else
+		# Win test???
+		ls -l
+	fi
+'
+
+test_expect_success DIR_ENDS_WITH_SP 'apply with no-contents and a funny pathname' '
 
 	git apply --stat --check --apply sample.patch &&
 	test_must_be_empty "funny /empty" &&
