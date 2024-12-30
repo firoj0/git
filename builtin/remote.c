@@ -1,4 +1,6 @@
 #define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
 #include "builtin.h"
 #include "config.h"
 #include "gettext.h"
@@ -155,7 +157,8 @@ static int parse_mirror_opt(const struct option *opt, const char *arg, int not)
 	return 0;
 }
 
-static int add(int argc, const char **argv, const char *prefix)
+static int add(int argc, const char **argv, const char *prefix,
+	       struct repository *repo UNUSED)
 {
 	int fetch = 0, fetch_tags = TAGS_DEFAULT;
 	unsigned mirror = MIRROR_NONE;
@@ -706,7 +709,8 @@ static void handle_push_default(const char* old_name, const char* new_name)
 }
 
 
-static int mv(int argc, const char **argv, const char *prefix)
+static int mv(int argc, const char **argv, const char *prefix,
+	      struct repository *repo UNUSED)
 {
 	int show_progress = isatty(2);
 	struct option options[] = {
@@ -881,7 +885,8 @@ out:
 	return result;
 }
 
-static int rm(int argc, const char **argv, const char *prefix)
+static int rm(int argc, const char **argv, const char *prefix,
+	      struct repository *repo UNUSED)
 {
 	struct option options[] = {
 		OPT_END()
@@ -1303,7 +1308,8 @@ static int show_all(void)
 	return result;
 }
 
-static int show(int argc, const char **argv, const char *prefix)
+static int show(int argc, const char **argv, const char *prefix,
+		struct repository *repo UNUSED)
 {
 	int no_query = 0, result = 0, query_flag = 0;
 	struct option options[] = {
@@ -1399,11 +1405,42 @@ static int show(int argc, const char **argv, const char *prefix)
 	return result;
 }
 
-static int set_head(int argc, const char **argv, const char *prefix)
+static void report_set_head_auto(const char *remote, const char *head_name,
+			struct strbuf *b_local_head, int was_detached) {
+	struct strbuf buf_prefix = STRBUF_INIT;
+	const char *prev_head = NULL;
+
+	strbuf_addf(&buf_prefix, "refs/remotes/%s/", remote);
+	skip_prefix(b_local_head->buf, buf_prefix.buf, &prev_head);
+
+	if (prev_head && !strcmp(prev_head, head_name))
+		printf(_("'%s/HEAD' is unchanged and points to '%s'\n"),
+			remote, head_name);
+	else if (prev_head)
+		printf(_("'%s/HEAD' has changed from '%s' and now points to '%s'\n"),
+			remote, prev_head, head_name);
+	else if (!b_local_head->len)
+		printf(_("'%s/HEAD' is now created and points to '%s'\n"),
+			remote, head_name);
+	else if (was_detached && b_local_head->len)
+		printf(_("'%s/HEAD' was detached at '%s' and now points to '%s'\n"),
+			remote, b_local_head->buf, head_name);
+	else
+		printf(_("'%s/HEAD' used to point to '%s' "
+			"(which is not a remote branch), but now points to '%s'\n"),
+			remote, b_local_head->buf, head_name);
+	strbuf_release(&buf_prefix);
+}
+
+static int set_head(int argc, const char **argv, const char *prefix,
+		    struct repository *repo UNUSED)
 {
-	int i, opt_a = 0, opt_d = 0, result = 0;
-	struct strbuf buf = STRBUF_INIT, buf2 = STRBUF_INIT;
+	int i, opt_a = 0, opt_d = 0, result = 0, was_detached;
+	struct strbuf b_head = STRBUF_INIT, b_remote_head = STRBUF_INIT,
+		b_local_head = STRBUF_INIT;
 	char *head_name = NULL;
+	struct ref_store *refs = get_main_ref_store(the_repository);
+	struct remote *remote;
 
 	struct option options[] = {
 		OPT_BOOL('a', "auto", &opt_a,
@@ -1414,8 +1451,10 @@ static int set_head(int argc, const char **argv, const char *prefix)
 	};
 	argc = parse_options(argc, argv, prefix, options,
 			     builtin_remote_sethead_usage, 0);
-	if (argc)
-		strbuf_addf(&buf, "refs/remotes/%s/HEAD", argv[0]);
+	if (argc) {
+		strbuf_addf(&b_head, "refs/remotes/%s/HEAD", argv[0]);
+		remote = remote_get(argv[0]);
+	}
 
 	if (!opt_a && !opt_d && argc == 2) {
 		head_name = xstrdup(argv[1]);
@@ -1434,25 +1473,39 @@ static int set_head(int argc, const char **argv, const char *prefix)
 			head_name = xstrdup(states.heads.items[0].string);
 		free_remote_ref_states(&states);
 	} else if (opt_d && !opt_a && argc == 1) {
-		if (refs_delete_ref(get_main_ref_store(the_repository), NULL, buf.buf, NULL, REF_NO_DEREF))
-			result |= error(_("Could not delete %s"), buf.buf);
+		if (refs_delete_ref(refs, NULL, b_head.buf, NULL, REF_NO_DEREF))
+			result |= error(_("Could not delete %s"), b_head.buf);
 	} else
 		usage_with_options(builtin_remote_sethead_usage, options);
 
-	if (head_name) {
-		strbuf_addf(&buf2, "refs/remotes/%s/%s", argv[0], head_name);
-		/* make sure it's valid */
-		if (!refs_ref_exists(get_main_ref_store(the_repository), buf2.buf))
-			result |= error(_("Not a valid ref: %s"), buf2.buf);
-		else if (refs_update_symref(get_main_ref_store(the_repository), buf.buf, buf2.buf, "remote set-head"))
-			result |= error(_("Could not setup %s"), buf.buf);
-		else if (opt_a)
-			printf("%s/HEAD set to %s\n", argv[0], head_name);
-		free(head_name);
+	if (!head_name)
+		goto cleanup;
+	strbuf_addf(&b_remote_head, "refs/remotes/%s/%s", argv[0], head_name);
+	if (!refs_ref_exists(refs, b_remote_head.buf)) {
+		result |= error(_("Not a valid ref: %s"), b_remote_head.buf);
+		goto cleanup;
+	}
+	was_detached = refs_update_symref_extended(refs, b_head.buf, b_remote_head.buf,
+			"remote set-head", &b_local_head, 0);
+	if (was_detached == -1) {
+		result |= error(_("Could not set up %s"), b_head.buf);
+		goto cleanup;
+	}
+	if (opt_a)
+		report_set_head_auto(argv[0], head_name, &b_local_head, was_detached);
+	if (remote->follow_remote_head == FOLLOW_REMOTE_ALWAYS) {
+		struct strbuf config_name = STRBUF_INIT;
+		strbuf_addf(&config_name,
+			"remote.%s.followremotehead", remote->name);
+		git_config_set(config_name.buf, "warn");
+		strbuf_release(&config_name);
 	}
 
-	strbuf_release(&buf);
-	strbuf_release(&buf2);
+cleanup:
+	free(head_name);
+	strbuf_release(&b_head);
+	strbuf_release(&b_remote_head);
+	strbuf_release(&b_local_head);
 	return result;
 }
 
@@ -1503,7 +1556,8 @@ static int prune_remote(const char *remote, int dry_run)
 	return result;
 }
 
-static int prune(int argc, const char **argv, const char *prefix)
+static int prune(int argc, const char **argv, const char *prefix,
+		 struct repository *repo UNUSED)
 {
 	int dry_run = 0, result = 0;
 	struct option options[] = {
@@ -1534,7 +1588,8 @@ static int get_remote_default(const char *key, const char *value UNUSED,
 	return 0;
 }
 
-static int update(int argc, const char **argv, const char *prefix)
+static int update(int argc, const char **argv, const char *prefix,
+		  struct repository *repo UNUSED)
 {
 	int i, prune = -1;
 	struct option options[] = {
@@ -1616,7 +1671,8 @@ static int set_remote_branches(const char *remotename, const char **branches,
 	return 0;
 }
 
-static int set_branches(int argc, const char **argv, const char *prefix)
+static int set_branches(int argc, const char **argv, const char *prefix,
+			struct repository *repo UNUSED)
 {
 	int add_mode = 0;
 	struct option options[] = {
@@ -1635,7 +1691,8 @@ static int set_branches(int argc, const char **argv, const char *prefix)
 	return set_remote_branches(argv[0], argv + 1, add_mode);
 }
 
-static int get_url(int argc, const char **argv, const char *prefix)
+static int get_url(int argc, const char **argv, const char *prefix,
+		   struct repository *repo UNUSED)
 {
 	int i, push_mode = 0, all_mode = 0;
 	const char *remotename = NULL;
@@ -1674,7 +1731,8 @@ static int get_url(int argc, const char **argv, const char *prefix)
 	return 0;
 }
 
-static int set_url(int argc, const char **argv, const char *prefix)
+static int set_url(int argc, const char **argv, const char *prefix,
+		   struct repository *repo UNUSED)
 {
 	int i, push_mode = 0, add_mode = 0, delete_mode = 0;
 	int matches = 0, negative_matches = 0;
@@ -1765,7 +1823,7 @@ out:
 int cmd_remote(int argc,
 	       const char **argv,
 	       const char *prefix,
-	       struct repository *repo UNUSED)
+	       struct repository *repo)
 {
 	parse_opt_subcommand_fn *fn = NULL;
 	struct option options[] = {
@@ -1788,7 +1846,7 @@ int cmd_remote(int argc,
 			     PARSE_OPT_SUBCOMMAND_OPTIONAL);
 
 	if (fn) {
-		return !!fn(argc, argv, prefix);
+		return !!fn(argc, argv, prefix, repo);
 	} else {
 		if (argc) {
 			error(_("unknown subcommand: `%s'"), argv[0]);

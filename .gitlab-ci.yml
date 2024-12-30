@@ -20,6 +20,7 @@ test:linux:
     - saas-linux-medium-amd64
   variables:
     CUSTOM_PATH: "/custom"
+    TEST_OUTPUT_DIRECTORY: "/tmp/test-output"
   before_script:
     - ./ci/install-dependencies.sh
   script:
@@ -31,11 +32,12 @@ test:linux:
       if test "$CI_JOB_STATUS" != 'success'
       then
         sudo --preserve-env --set-home --user=builder ./ci/print-test-failures.sh
+        mv "$TEST_OUTPUT_DIRECTORY"/failed-test-artifacts t/
       fi
   parallel:
     matrix:
       - jobname: linux-old
-        image: ubuntu:16.04
+        image: ubuntu:20.04
         CC: gcc
       - jobname: linux-sha256
         image: ubuntu:latest
@@ -67,6 +69,9 @@ test:linux:
         image: fedora:latest
       - jobname: linux-musl
         image: alpine:latest
+      - jobname: linux-meson
+        image: ubuntu:latest
+        CC: gcc
   artifacts:
     paths:
       - t/failed-test-artifacts
@@ -99,10 +104,13 @@ test:osx:
   parallel:
     matrix:
       - jobname: osx-clang
-        image: macos-13-xcode-14
+        image: macos-14-xcode-15
         CC: clang
       - jobname: osx-reftable
-        image: macos-13-xcode-14
+        image: macos-14-xcode-15
+        CC: clang
+      - jobname: osx-meson
+        image: macos-14-xcode-15
         CC: clang
   artifacts:
     paths:

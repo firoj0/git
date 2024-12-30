@@ -4,7 +4,6 @@ test_description='test local clone'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 repo_is_hardlinked() {
@@ -152,6 +151,16 @@ test_expect_success 'cloning file:// does not hardlink' '
 test_expect_success 'cloning a local path with --no-local does not hardlink' '
 	git clone --bare --no-local a force-nonlocal &&
 	! repo_is_hardlinked force-nonlocal
+'
+
+test_expect_success 'cloning a local path with --no-local from a different user succeeds' '
+	git clone --upload-pack="GIT_TEST_ASSUME_DIFFERENT_OWNER=true git-upload-pack" \
+		--no-local a nonlocal-otheruser 2>err &&
+	! repo_is_hardlinked nonlocal-otheruser &&
+	# Verify that this is a git repository.
+	git -C nonlocal-otheruser rev-parse --show-toplevel &&
+	! test_grep "detected dubious ownership" err
+
 '
 
 test_expect_success 'cloning locally respects "-u" for fetching refs' '

@@ -19,12 +19,31 @@ UI, Workflows & Features
  * Documentation for "git bundle" saw improvements to more prominently
    call out the use of '--all' when creating bundles.
 
+ * Drop support for older libcURL and Perl.
+
+ * End-user experience of "git mergetool" when the command errors out
+   has been improved.
+
+ * "git bundle --unbundle" and "git clone" running on a bundle file
+   both learned to trigger fsck over the new objects with configurable
+   fck check levels.
+
+ * When "git fetch $remote" notices that refs/remotes/$remote/HEAD is
+   missing and discovers what branch the other side points with its
+   HEAD, refs/remotes/$remote/HEAD is updated to point to it.
+
+ * "git fetch" honors "remote.<remote>.followRemoteHEAD" settings to
+   tweak the remote-tracking HEAD in "refs/remotes/<remote>/HEAD".
+
+ * "git range-diff" learned to optionally show and compare merge
+   commits in the ranges being compared, with the --diff-merges
+   option.
+
 
 Performance, Internal Implementation, Development Support etc.
 --------------------------------------------------------------
 
  * Document "amlog" notes.
-   (merge ddfb5bcfc6 tb/notes-amlog-doc later to maint).
 
  * The way AsciiDoc is used for SYNOPSIS part of the manual pages has
    been revamped.  The sources, at least for the simple cases, got
@@ -94,13 +113,63 @@ Performance, Internal Implementation, Development Support etc.
  * We now ensure "index-pack" is used with the "--promisor" option
    only during a "git fetch".
 
+ * The migration procedure between two ref backends has been optimized.
+
+ * "git fsck" learned to issue warnings on "curiously formatted" ref
+   contents that have always been taken valid but something Git
+   wouldn't have written itself (e.g., missing terminating end-of-line
+   after the full object name).
+
+ * Work around Coverity warning that would not trigger in practice.
+
+ * Built-in Git subcommands are supplied the repository object to work
+   with; they learned to do the same when they invoke sub-subcommands.
+
+ * Drop support for ancient environments in various CI jobs.
+
+ * Isolates the reftable subsystem from the rest of Git's codebase by
+   using fewer pieces of Git's infrastructure.
+
+ * Optimize reading random references out of the reftable backend by
+   allowing reuse of iterator objects.
+
+ * Backport oss-fuzz tests for us to our codebase.
+
+ * Introduce a new repository extension to prevent older Git versions
+   from mis-interpreting worktrees created with relative paths.
+
+ * Yet another "pass the repository through the callchain" topic.
+
+ * "git describe" learned to stop digging the history needlessly
+   deeper.
+
+ * Build procedure update plus introduction of Meson based builds.
+
+ * Recent reftable updates mistook a NULL return from a request for
+   0-byte allocation as OOM and died unnecessarily, which has been
+   corrected.
+
+ * Reftable backend adds check for upper limit of log's update_index.
+
+ * Start working to make the codebase buildable with -Wsign-compare.
+
+ * Regression fix for 'show-index' when run outside of a repository.
+
+ * The meson-build procedure is integrated into CI to catch and
+   prevent bitrotting.
+
+ * "git refs migrate" learned to also migrate the reflog data across
+   backends.
+
+ * The developer documentation has been updated to give the latest
+   info on gitk and git-gui maintainer.
+
 
 Fixes since v2.47
 -----------------
 
  * Doc update to clarify how periodical maintenance are scheduled,
    spread across time to avoid thundering hurds.
-   (merge 3d6ab4177d sk/doc-maintenance-schedule later to maint).
 
  * Use after free and double freeing at the end in "git log -L... -p"
    had been identified and fixed.
@@ -179,17 +248,74 @@ Fixes since v2.47
    been corrected.
    (merge b886db48c6 kn/ref-transaction-hook-with-reflog later to maint).
 
+ * Give a bit of advice/hint message when "git maintenance" stops finding a
+   lock file left by another instance that still is potentially running.
+   (merge ba874d1dac ps/gc-stale-lock-warning later to maint).
+
+ * Use the right helper program to measure file size in performance tests.
+   (merge 3f97f1bce6 tb/use-test-file-size-more later to maint).
+
+ * A double-free that may not trigger in practice by luck has been
+   corrected in the reference resolution code.
+   (merge b6318cf23a sj/refs-symref-referent-fix later to maint).
+
+ * The sequencer failed to honor core.commentString in some places.
+
+ * Describe a case where an option value needs to be spelled as a
+   separate argument, i.e. "--opt val", not "--opt=val".
+   (merge 1bc1e94091 jc/doc-opt-tilde-expand later to maint).
+
+ * Loosen overly strict ownership check introduced in the recent past,
+   to keep the promise "cloning a suspicious repository is a safe
+   first step to inspect it".
+   (merge 0ffb5a6bf1 bc/allow-upload-pack-from-other-people later to maint).
+
+ * "git fast-import" learned to reject paths with ".."  and "." as
+   their components to avoid creating invalid tree objects.
+   (merge 8cb4c6e62f en/fast-import-verify-path later to maint).
+
+ * The --ancestry-path option is designed to be given a commit that is
+   on the path, which was not documented, which has been corrected.
+   (merge bc1a980759 kk/doc-ancestry-path later to maint).
+
+
+ * "git tag" has been taught to refuse to create refs/tags/HEAD
+   as such a tag will be confusing in the context of UI provided by
+   the Git Porcelain commands.
+   (merge bbd445d5ef jc/forbid-head-as-tagname later to maint).
+
+ * The advice messages now tell the newer 'git config set' command to
+   set the advice.token configuration variable to squelch a message.
+   (merge 6c397d0104 bf/explicit-config-set-in-advice-messages later to maint).
+
+ * The syntax ":/<text>" to name the latest commit with the matching
+   text was broken with a recent change, which has been corrected.
+   (merge 0ff919e87a ps/commit-with-message-syntax-fix later to maint).
+
+ * Fix performance regression of a recent "fatten promisor pack with
+   local objects" protection against an unwanted gc.
+
+ * "git log -p --remerge-diff --reverse" was completely broken.
+   (merge f94bfa1516 js/log-remerge-keep-ancestry later to maint).
+
+ * "git bundle create" with an annotated tag on the positive end of
+   the revision range had a workaround code for older limitation in
+   the revision walker, which has become unnecessary.
+   (merge dd1072dfa8 tc/bundle-with-tag-remove-workaround later to maint).
+
+ * GitLab CI updates.
+   (merge c6b43f663e ps/ci-gitlab-update later to maint).
+
+ * Code to reuse objects based on bitmap contents have been tightened
+   to avoid race condition even when multiple packs are involved.
+   (merge 62b3ec8a3f tb/bitmap-fix-pack-reuse later to maint).
+
  * Other code cleanup, docfix, build fix, etc.
-   (merge 1164e270b5 jk/output-prefix-cleanup later to maint).
-   (merge f36b8cbaef jh/config-unset-doc-fix later to maint).
-   (merge 4154ed4108 js/doc-platform-support-link-fix later to maint).
    (merge 77af53f56f aa/t7300-modernize later to maint).
-   (merge 8ead1bba3e jc/doc-refspec-syntax later to maint).
-   (merge 432f666aa6 kn/loose-object-layer-wo-global-hash later to maint).
-   (merge c4b8fb6ef2 kh/merge-tree-doc later to maint).
-   (merge b8139c8f4e kh/checkout-ignore-other-docfix later to maint).
-   (merge 6dab49b9fb tc/bundle-uri-leakfix later to maint).
-   (merge f1ed39987b xx/protocol-v2-doc-markup-fix later to maint).
-   (merge 41869f7447 ak/typofixes later to maint).
    (merge dcd590a39d bf/t-readme-mention-reftable later to maint).
    (merge 68e3c69efa kh/trailer-in-glossary later to maint).
+   (merge 91f88f76e6 tb/boundary-traversal-fix later to maint).
+   (merge 168ebb7159 jc/doc-error-message-guidelines later to maint).
+   (merge 18693d7d65 kh/doc-bundle-typofix later to maint).
+   (merge e2f5d3b491 kh/doc-update-ref-grammofix later to maint).
+   (merge 8525e92886 mh/doc-windows-home-env later to maint).

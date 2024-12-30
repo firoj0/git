@@ -113,15 +113,13 @@ jobs:
       cancel-in-progress: ${{ needs.ci-config.outputs.skip_concurrent == 'yes' }}
     steps:
     - uses: actions/checkout@v4
-    - name: setup SDK
-      shell: powershell
-      run: ci/install-sdk.ps1
+    - uses: git-for-windows/setup-git-for-windows-sdk@v1
     - name: build
-      shell: powershell
+      shell: bash
       env:
         HOME: ${{runner.workspace}}
         NO_PERL: 1
-      run: git-sdk/usr/bin/bash.exe -l -c 'ci/make-test-artifacts.sh artifacts'
+      run: . /etc/profile && ci/make-test-artifacts.sh artifacts
     - name: zip up tracked files
       run: git archive -o artifacts/tracked.tar.gz HEAD
     - name: upload tracked files and build artifacts
@@ -149,12 +147,10 @@ jobs:
     - name: extract tracked files and build artifacts
       shell: bash
       run: tar xf artifacts.tar.gz && tar xf tracked.tar.gz
-    - name: setup SDK
-      shell: powershell
-      run: ci/install-sdk.ps1
+    - uses: git-for-windows/setup-git-for-windows-sdk@v1
     - name: test
-      shell: powershell
-      run: git-sdk/usr/bin/bash.exe -l -c 'ci/run-test-slice.sh ${{matrix.nr}} 10'
+      shell: bash
+      run: . /etc/profile && ci/run-test-slice.sh ${{matrix.nr}} 10
     - name: print test failures
       if: failure() && env.FAILED_TEST_ARTIFACTS != ''
       shell: bash
@@ -286,6 +282,9 @@ jobs:
           - jobname: osx-gcc
             cc: gcc-13
             pool: macos-13
+          - jobname: osx-meson
+            cc: clang
+            pool: macos-13
           - jobname: linux-gcc-default
             cc: gcc
             pool: ubuntu-latest
@@ -298,11 +297,15 @@ jobs:
           - jobname: linux-asan-ubsan
             cc: clang
             pool: ubuntu-latest
+          - jobname: linux-meson
+            cc: gcc
+            pool: ubuntu-latest
     env:
       CC: ${{matrix.vector.cc}}
       CC_PACKAGE: ${{matrix.vector.cc_package}}
       jobname: ${{matrix.vector.jobname}}
       distro: ${{matrix.vector.pool}}
+      TEST_OUTPUT_DIRECTORY: ${{github.workspace}}/t
     runs-on: ${{matrix.vector.pool}}
     steps:
     - uses: actions/checkout@v4
@@ -342,12 +345,21 @@ jobs:
         - jobname: linux-musl
           image: alpine
           distro: alpine-latest
+        # Supported until 2025-04-02.
         - jobname: linux32
           image: i386/ubuntu:focal
           distro: ubuntu32-20.04
         - jobname: pedantic
           image: fedora
           distro: fedora-latest
+        # A RHEL 8 compatible distro.  Supported until 2029-05-31.
+        - jobname: almalinux-8
+          image: almalinux:8
+          distro: almalinux-8
+        # Supported until 2026-08-31.
+        - jobname: debian-11
+          image: debian:11
+          distro: debian-11
     env:
       jobname: ${{matrix.vector.jobname}}
       distro: ${{matrix.vector.distro}}

@@ -10,7 +10,6 @@ Tests for operations with tags.'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-gpg.sh
 . "$TEST_DIRECTORY"/lib-terminal.sh
@@ -90,6 +89,18 @@ test_expect_success 'creating a tag using default HEAD should succeed' '
 	git commit -m Foo &&
 	git tag mytag &&
 	test_must_fail git reflog exists refs/tags/mytag
+'
+
+test_expect_success 'HEAD is forbidden as a tagname' '
+	test_when_finished "git update-ref --no-deref -d refs/tags/HEAD || :" &&
+	test_must_fail git tag HEAD &&
+	test_must_fail git tag -a -m "useless" HEAD
+'
+
+test_expect_success '"git tag" can remove a tag named HEAD' '
+	test_when_finished "git update-ref --no-deref -d refs/tags/HEAD || :" &&
+	git update-ref refs/tags/HEAD HEAD &&
+	git tag -d HEAD
 '
 
 test_expect_success 'creating a tag with --create-reflog should create reflog' '
@@ -1851,7 +1862,7 @@ test_expect_success 'recursive tagging should give advice' '
 	hint: already a tag. If you meant to tag the object that it points to, use:
 	hint:
 	hint: 	git tag -f nested annotated-v4.0^{}
-	hint: Disable this message with "git config advice.nestedTag false"
+	hint: Disable this message with "git config set advice.nestedTag false"
 	EOF
 	git tag -m nested nested annotated-v4.0 2>actual &&
 	test_cmp expect actual

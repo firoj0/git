@@ -13,7 +13,6 @@ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 TEST_CREATE_REPO_NO_TEMPLATE=1
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 pristine_detach () {
@@ -35,7 +34,7 @@ test_expect_success setup '
 	git commit --allow-empty --allow-empty-message &&
 	git tag empty &&
 	git checkout main &&
-	git config advice.detachedhead false
+	git config set advice.detachedhead false
 
 '
 
@@ -61,7 +60,7 @@ test_expect_success 'advice from failed cherry-pick' '
 	hint: You can instead skip this commit with "git cherry-pick --skip".
 	hint: To abort and get back to the state before "git cherry-pick",
 	hint: run "git cherry-pick --abort".
-	hint: Disable this message with "git config advice.mergeConflict false"
+	hint: Disable this message with "git config set advice.mergeConflict false"
 	EOF
 	test_must_fail git cherry-pick picked 2>actual &&
 
@@ -76,7 +75,7 @@ test_expect_success 'advice from failed cherry-pick --no-commit' "
 	error: could not apply \$picked... picked
 	hint: after resolving the conflicts, mark the corrected paths
 	hint: with 'git add <paths>' or 'git rm <paths>'
-	hint: Disable this message with \"git config advice.mergeConflict false\"
+	hint: Disable this message with \"git config set advice.mergeConflict false\"
 	EOF
 	test_must_fail git cherry-pick --no-commit picked 2>actual &&
 

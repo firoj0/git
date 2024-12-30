@@ -1,3 +1,5 @@
+#define DISABLE_SIGN_COMPARE_WARNINGS
+
 #include "git-compat-util.h"
 #include "diffcore.h"
 #include "line-range.h"
@@ -1237,6 +1239,7 @@ static int process_ranges_merge_commit(struct rev_info *rev, struct commit *comm
 			 * don't follow any other path in history
 			 */
 			add_line_range(rev, parents[i], cand[i]);
+			free_commit_list(commit->parents);
 			commit_list_append(parents[i], &commit->parents);
 
 			ret = 0;

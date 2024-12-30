@@ -17,6 +17,8 @@ static void (*reftable_free_ptr)(void *);
 
 void *reftable_malloc(size_t sz)
 {
+	if (!sz)
+		return NULL;
 	if (reftable_malloc_ptr)
 		return (*reftable_malloc_ptr)(sz);
 	return malloc(sz);
@@ -24,6 +26,11 @@ void *reftable_malloc(size_t sz)
 
 void *reftable_realloc(void *p, size_t sz)
 {
+	if (!sz) {
+		reftable_free(p);
+		return NULL;
+	}
+
 	if (reftable_realloc_ptr)
 		return (*reftable_realloc_ptr)(p, sz);
 	return realloc(p, sz);
@@ -271,14 +278,15 @@ int common_prefix_size(struct reftable_buf *a, struct reftable_buf *b)
 	return p;
 }
 
-int hash_size(uint32_t id)
+int hash_size(enum reftable_hash id)
 {
+	if (!id)
+		return REFTABLE_HASH_SIZE_SHA1;
 	switch (id) {
-	case 0:
-	case GIT_SHA1_FORMAT_ID:
-		return GIT_SHA1_RAWSZ;
-	case GIT_SHA256_FORMAT_ID:
-		return GIT_SHA256_RAWSZ;
+	case REFTABLE_HASH_SHA1:
+		return REFTABLE_HASH_SIZE_SHA1;
+	case REFTABLE_HASH_SHA256:
+		return REFTABLE_HASH_SIZE_SHA256;
 	}
 	abort();
 }

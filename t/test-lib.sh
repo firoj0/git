@@ -35,13 +35,7 @@ else
 	# needing to exist.
 	TEST_DIRECTORY=$(cd "$TEST_DIRECTORY" && pwd) || exit 1
 fi
-if test -z "$TEST_OUTPUT_DIRECTORY"
-then
-	# Similarly, override this to store the test-results subdir
-	# elsewhere
-	TEST_OUTPUT_DIRECTORY=$TEST_DIRECTORY
-fi
-GIT_BUILD_DIR="${TEST_DIRECTORY%/t}"
+GIT_BUILD_DIR="${GIT_BUILD_DIR:-${TEST_DIRECTORY%/t}}"
 if test "$TEST_DIRECTORY" = "$GIT_BUILD_DIR"
 then
 	echo "PANIC: Running in a $TEST_DIRECTORY that doesn't end in '/t'?" >&2
@@ -92,6 +86,15 @@ export LSAN_OPTIONS
 prepend_var UBSAN_OPTIONS : $GIT_SAN_OPTIONS
 export UBSAN_OPTIONS
 
+# The TEST_OUTPUT_DIRECTORY will be overwritten via GIT-BUILD-OPTIONS. So in
+# case the caller has manually set up this variable via the environment we must
+# make sure to not overwrite that value, and thus we save it into
+# TEST_OUTPUT_DIRECTORY_OVERRIDE here.
+if test -n "$TEST_OUTPUT_DIRECTORY" && test -z "$TEST_OUTPUT_DIRECTORY_OVERRIDE"
+then
+	TEST_OUTPUT_DIRECTORY_OVERRIDE=$TEST_OUTPUT_DIRECTORY
+fi
+
 if test ! -f "$GIT_BUILD_DIR"/GIT-BUILD-OPTIONS
 then
 	echo >&2 'error: GIT-BUILD-OPTIONS missing (has Git been built?).'
@@ -99,6 +102,13 @@ then
 fi
 . "$GIT_BUILD_DIR"/GIT-BUILD-OPTIONS
 export PERL_PATH SHELL_PATH
+
+if test -z "$TEST_OUTPUT_DIRECTORY"
+then
+	# Similarly, override this to store the test-results subdir
+	# elsewhere
+	TEST_OUTPUT_DIRECTORY=$TEST_DIRECTORY
+fi
 
 # In t0000, we need to override test directories of nested testcases. In case
 # the developer has TEST_OUTPUT_DIRECTORY part of his build options, then we'd
@@ -512,6 +522,7 @@ unset VISUAL EMAIL LANGUAGE $("$PERL_PATH" -e '
 		PERF_
 		CURL_VERBOSE
 		TRACE_CURL
+		BUILD_DIR
 	));
 	my @vars = grep(/^GIT_/ && !/^GIT_($ok)/o, @env);
 	print join("\n", @vars);
@@ -1180,23 +1191,7 @@ check_test_results_san_file_ () {
 	fi &&
 	say_color error "$(cat "$TEST_RESULTS_SAN_FILE".*)" &&
 
-	if test -n "$passes_sanitize_leak" && test "$test_failure" = 0
-	then
-		say "As TEST_PASSES_SANITIZE_LEAK=true and our logs show we're leaking, exit non-zero!" &&
-		invert_exit_code=t
-	elif test -n "$passes_sanitize_leak"
-	then
-		say "As TEST_PASSES_SANITIZE_LEAK=true and our logs show we're leaking, and we're failing for other reasons too..." &&
-		invert_exit_code=
-	elif test -n "$sanitize_leak_check" && test "$test_failure" = 0
-	then
-		say "As TEST_PASSES_SANITIZE_LEAK=true isn't set the above leak is 'ok' with GIT_TEST_PASSING_SANITIZE_LEAK=check" &&
-		invert_exit_code=
-	elif test -n "$sanitize_leak_check"
-	then
-		say "As TEST_PASSES_SANITIZE_LEAK=true isn't set the above leak is 'ok' with GIT_TEST_PASSING_SANITIZE_LEAK=check" &&
-		invert_exit_code=t
-	elif test "$test_failure" = 0
+	if test "$test_failure" = 0
 	then
 		say "Our logs revealed a memory leak, exit non-zero!" &&
 		invert_exit_code=t
@@ -1225,11 +1220,6 @@ test_done () {
 		missing_prereq $test_missing_prereq
 
 		EOF
-	fi
-
-	if test -z "$passes_sanitize_leak" && test_bool_env TEST_PASSES_SANITIZE_LEAK false
-	then
-		BAIL_OUT "Please, set TEST_PASSES_SANITIZE_LEAK before sourcing test-lib.sh"
 	fi
 
 	if test "$test_fixed" != 0
@@ -1430,7 +1420,7 @@ else # normal case, use ../bin-wrappers only unless $with_dashes:
 		PATH="$GIT_BUILD_DIR:$GIT_BUILD_DIR/t/helper:$PATH"
 	fi
 fi
-GIT_TEMPLATE_DIR="$GIT_BUILD_DIR"/templates/blt
+GIT_TEMPLATE_DIR="$GIT_TEST_TEMPLATE_DIR"
 GIT_CONFIG_NOSYSTEM=1
 GIT_ATTR_NOSYSTEM=1
 GIT_CEILING_DIRECTORIES="$TRASH_DIRECTORY/.."
@@ -1496,9 +1486,9 @@ then
 	fi
 fi
 
-GITPERLLIB="$GIT_BUILD_DIR"/perl/build/lib
+GITPERLLIB="$GIT_TEST_GITPERLLIB"
 export GITPERLLIB
-test -d "$GIT_BUILD_DIR"/templates/blt || {
+test -d "$GIT_TEMPLATE_DIR" || {
 	BAIL_OUT "You haven't built things yet, have you?"
 }
 
@@ -1518,51 +1508,8 @@ then
 	test_done
 fi
 
-BAIL_OUT_ENV_NEEDS_SANITIZE_LEAK () {
-	BAIL_OUT "$1 has no effect except when compiled with SANITIZE=leak"
-}
-
 if test -n "$SANITIZE_LEAK"
 then
-	# Normalize with test_bool_env
-	passes_sanitize_leak=
-
-	# We need to see TEST_PASSES_SANITIZE_LEAK in "test-tool
-	# env-helper" (via test_bool_env)
-	export TEST_PASSES_SANITIZE_LEAK
-	if test_bool_env TEST_PASSES_SANITIZE_LEAK false
-	then
-		passes_sanitize_leak=t
-	fi
-
-	if test "$GIT_TEST_PASSING_SANITIZE_LEAK" = "check" ||
-	   test "$GIT_TEST_PASSING_SANITIZE_LEAK" = "check-failing"
-	then
-		if test "$GIT_TEST_PASSING_SANITIZE_LEAK" = "check-failing" &&
-		   test -n "$passes_sanitize_leak"
-		then
-			skip_all="skipping leak-free $this_test under GIT_TEST_PASSING_SANITIZE_LEAK=check-failing"
-			test_done
-		fi
-
-		sanitize_leak_check=t
-		if test -n "$invert_exit_code"
-		then
-			BAIL_OUT "cannot use --invert-exit-code under GIT_TEST_PASSING_SANITIZE_LEAK=check"
-		fi
-
-		if test -z "$passes_sanitize_leak"
-		then
-			say "in GIT_TEST_PASSING_SANITIZE_LEAK=check mode, setting --invert-exit-code for TEST_PASSES_SANITIZE_LEAK != true"
-			invert_exit_code=t
-		fi
-	elif test -z "$passes_sanitize_leak" &&
-	     test_bool_env GIT_TEST_PASSING_SANITIZE_LEAK false
-	then
-		skip_all="skipping $this_test under GIT_TEST_PASSING_SANITIZE_LEAK=true"
-		test_done
-	fi
-
 	rm -rf "$TEST_RESULTS_SAN_DIR"
 	if ! mkdir -p "$TEST_RESULTS_SAN_DIR"
 	then
@@ -1577,12 +1524,6 @@ then
 	prepend_var LSAN_OPTIONS : log_exe_name=1
 	prepend_var LSAN_OPTIONS : log_path="'$TEST_RESULTS_SAN_FILE'"
 	export LSAN_OPTIONS
-
-elif test "$GIT_TEST_PASSING_SANITIZE_LEAK" = "check" ||
-     test "$GIT_TEST_PASSING_SANITIZE_LEAK" = "check-failing" ||
-     test_bool_env GIT_TEST_PASSING_SANITIZE_LEAK false
-then
-	BAIL_OUT_ENV_NEEDS_SANITIZE_LEAK "GIT_TEST_PASSING_SANITIZE_LEAK=true"
 fi
 
 if test "${GIT_TEST_CHAIN_LINT:-1}" != 0 &&
@@ -1746,6 +1687,7 @@ esac
 
 ( COLUMNS=1 && test $COLUMNS = 1 ) && test_set_prereq COLUMNS_CAN_BE_1
 test -z "$NO_CURL" && test_set_prereq LIBCURL
+test -z "$NO_GITWEB" && test_set_prereq GITWEB
 test -z "$NO_ICONV" && test_set_prereq ICONV
 test -z "$NO_PERL" && test_set_prereq PERL
 test -z "$NO_PTHREADS" && test_set_prereq PTHREADS

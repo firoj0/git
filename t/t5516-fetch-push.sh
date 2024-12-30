@@ -19,7 +19,6 @@ GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
 TEST_CREATE_REPO_NO_TEMPLATE=1
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 D=$(pwd)
@@ -1395,7 +1394,8 @@ test_expect_success 'fetch follows tags by default' '
 		git tag -m "annotated" tag &&
 		git for-each-ref >tmp1 &&
 		sed -n "p; s|refs/heads/main$|refs/remotes/origin/main|p" tmp1 |
-		sort -k 3 >../expect
+		sed -n "p; s|refs/heads/main$|refs/remotes/origin/HEAD|p"  |
+		sort -k 4 >../expect
 	) &&
 	test_when_finished "rm -rf dst" &&
 	git init dst &&

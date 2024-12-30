@@ -7,7 +7,6 @@ test_description='git fast-export'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success 'setup' '
@@ -632,7 +631,7 @@ test_expect_success 'fast-export quotes pathnames' '
 	 git rev-list HEAD >expect &&
 	 git init result &&
 	 cd result &&
-	 git fast-import <../export.out &&
+	 git -c core.protectNTFS=false fast-import <../export.out &&
 	 git rev-list HEAD >actual &&
 	 test_cmp ../expect actual
 	)

@@ -8,7 +8,6 @@ test_description='test "git log --decorate" colors'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_expect_success setup '
@@ -59,7 +58,8 @@ ${c_reset}${c_tag}tag: ${c_reset}${c_tag}v1.0${c_reset}${c_commit}, \
 ${c_reset}${c_tag}tag: ${c_reset}${c_tag}B${c_reset}${c_commit})${c_reset} B
 ${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}\
 ${c_tag}tag: ${c_reset}${c_tag}A1${c_reset}${c_commit}, \
-${c_reset}${c_remoteBranch}other/main${c_reset}${c_commit})${c_reset} A1
+${c_reset}${c_remoteBranch}other/main${c_reset}${c_commit}, \
+${c_reset}${c_remoteBranch}other/HEAD${c_reset}${c_commit})${c_reset} A1
 	${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}\
 ${c_stash}refs/stash${c_reset}${c_commit})${c_reset} On main: Changes to A.t
 	${c_commit}COMMIT_ID${c_reset}${c_commit} (${c_reset}\

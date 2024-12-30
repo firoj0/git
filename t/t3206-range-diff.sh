@@ -5,7 +5,6 @@ test_description='range-diff tests'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 # Note that because of the range-diff's heuristics, test_commit does more
@@ -906,6 +905,22 @@ test_expect_success 'submodule changes are shown irrespective of diff.submodule'
 	test_cmp expect actual &&
 	test_config diff.submodule diff &&
 	git range-diff --creation-factor=100 topic topic-sub modified-sub >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success '--diff-merges' '
+	renamed_oid=$(git rev-parse --short renamed-file) &&
+	tree=$(git merge-tree unmodified renamed-file) &&
+	clean=$(git commit-tree -m merge -p unmodified -p renamed-file $tree) &&
+	clean_oid=$(git rev-parse --short $clean) &&
+	conflict=$(git commit-tree -m merge -p unmodified -p renamed-file^ $tree) &&
+	conflict_oid=$(git rev-parse --short $conflict) &&
+
+	git range-diff --diff-merges=1 $clean...$conflict >actual &&
+	cat >expect <<-EOF &&
+	1:  $renamed_oid < -:  ------- s/12/B/
+	2:  $clean_oid = 1:  $conflict_oid merge
+	EOF
 	test_cmp expect actual
 '
 

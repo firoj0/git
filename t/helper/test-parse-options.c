@@ -174,7 +174,6 @@ int cmd__parse_options(int argc, const char **argv)
 		OPT_ALIAS('Z', "alias-target", "alias-source"),
 		OPT_END(),
 	};
-	int i;
 	int ret = 0;
 
 	trace2_cmd_name("_parse_");
@@ -198,10 +197,10 @@ int cmd__parse_options(int argc, const char **argv)
 	show(&expect, &ret, "dry run: %s", dry_run ? "yes" : "no");
 	show(&expect, &ret, "file: %s", file ? file : "(not set)");
 
-	for (i = 0; i < list.nr; i++)
+	for (size_t i = 0; i < list.nr; i++)
 		show(&expect, &ret, "list: %s", list.items[i].string);
 
-	for (i = 0; i < argc; i++)
+	for (int i = 0; i < argc; i++)
 		show(&expect, &ret, "arg %02d: %s", i, argv[i]);
 
 	expect.strdup_strings = 1;
@@ -282,14 +281,16 @@ int cmd__parse_options_flags(int argc, const char **argv)
 	return parse_options_flags__cmd(argc, argv, test_flags);
 }
 
-static int subcmd_one(int argc, const char **argv, const char *prefix UNUSED)
+static int subcmd_one(int argc, const char **argv, const char *prefix UNUSED,
+		      struct repository *repo UNUSED)
 {
 	printf("fn: subcmd_one\n");
 	print_args(argc, argv);
 	return 0;
 }
 
-static int subcmd_two(int argc, const char **argv, const char *prefix UNUSED)
+static int subcmd_two(int argc, const char **argv, const char *prefix UNUSED,
+		      struct repository *repo UNUSED)
 {
 	printf("fn: subcmd_two\n");
 	print_args(argc, argv);
@@ -319,7 +320,7 @@ static int parse_subcommand__cmd(int argc, const char **argv,
 
 	printf("opt: %d\n", opt);
 
-	return fn(argc, argv, NULL);
+	return fn(argc, argv, NULL, NULL);
 }
 
 int cmd__parse_subcommand(int argc, const char **argv)

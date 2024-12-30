@@ -79,7 +79,7 @@ static void options_set_defaults(struct reftable_write_options *opts)
 	}
 
 	if (opts->hash_id == 0) {
-		opts->hash_id = GIT_SHA1_FORMAT_ID;
+		opts->hash_id = REFTABLE_HASH_SHA1;
 	}
 	if (opts->block_size == 0) {
 		opts->block_size = DEFAULT_BLOCK_SIZE;
@@ -88,7 +88,7 @@ static void options_set_defaults(struct reftable_write_options *opts)
 
 static int writer_version(struct reftable_writer *w)
 {
-	return (w->opts.hash_id == 0 || w->opts.hash_id == GIT_SHA1_FORMAT_ID) ?
+	return (w->opts.hash_id == 0 || w->opts.hash_id == REFTABLE_HASH_SHA1) ?
 			     1 :
 			     2;
 }
@@ -103,8 +103,22 @@ static int writer_write_header(struct reftable_writer *w, uint8_t *dest)
 	put_be64(dest + 8, w->min_update_index);
 	put_be64(dest + 16, w->max_update_index);
 	if (writer_version(w) == 2) {
-		put_be32(dest + 24, w->opts.hash_id);
+		uint32_t hash_id;
+
+		switch (w->opts.hash_id) {
+		case REFTABLE_HASH_SHA1:
+			hash_id = REFTABLE_FORMAT_ID_SHA1;
+			break;
+		case REFTABLE_HASH_SHA256:
+			hash_id = REFTABLE_FORMAT_ID_SHA256;
+			break;
+		default:
+			return -1;
+		}
+
+		put_be32(dest + 24, hash_id);
 	}
+
 	return header_size(writer_version(w));
 }
 
@@ -148,6 +162,7 @@ int reftable_writer_new(struct reftable_writer **out,
 
 	reftable_buf_init(&wp->block_writer_data.last_key);
 	reftable_buf_init(&wp->last_key);
+	reftable_buf_init(&wp->scratch);
 	REFTABLE_CALLOC_ARRAY(wp->block, opts.block_size);
 	if (!wp->block) {
 		reftable_free(wp);
@@ -180,6 +195,7 @@ static void writer_release(struct reftable_writer *w)
 		w->block_writer = NULL;
 		writer_clear_index(w);
 		reftable_buf_release(&w->last_key);
+		reftable_buf_release(&w->scratch);
 	}
 }
 
@@ -249,20 +265,19 @@ static int writer_index_hash(struct reftable_writer *w, struct reftable_buf *has
 static int writer_add_record(struct reftable_writer *w,
 			     struct reftable_record *rec)
 {
-	struct reftable_buf key = REFTABLE_BUF_INIT;
 	int err;
 
-	err = reftable_record_key(rec, &key);
+	err = reftable_record_key(rec, &w->scratch);
 	if (err < 0)
 		goto done;
 
-	if (reftable_buf_cmp(&w->last_key, &key) >= 0) {
+	if (reftable_buf_cmp(&w->last_key, &w->scratch) >= 0) {
 		err = REFTABLE_API_ERROR;
 		goto done;
 	}
 
 	reftable_buf_reset(&w->last_key);
-	err = reftable_buf_add(&w->last_key, key.buf, key.len);
+	err = reftable_buf_add(&w->last_key, w->scratch.buf, w->scratch.len);
 	if (err < 0)
 		goto done;
 
@@ -312,7 +327,6 @@ static int writer_add_record(struct reftable_writer *w,
 	}
 
 done:
-	reftable_buf_release(&key);
 	return err;
 }
 
@@ -325,7 +339,6 @@ int reftable_writer_add_ref(struct reftable_writer *w,
 			.ref = *ref
 		},
 	};
-	struct reftable_buf buf = REFTABLE_BUF_INIT;
 	int err;
 
 	if (!ref->refname ||
@@ -340,24 +353,25 @@ int reftable_writer_add_ref(struct reftable_writer *w,
 		goto out;
 
 	if (!w->opts.skip_index_objects && reftable_ref_record_val1(ref)) {
-		err = reftable_buf_add(&buf, (char *)reftable_ref_record_val1(ref),
+		reftable_buf_reset(&w->scratch);
+		err = reftable_buf_add(&w->scratch, (char *)reftable_ref_record_val1(ref),
 				       hash_size(w->opts.hash_id));
 		if (err < 0)
 			goto out;
 
-		err = writer_index_hash(w, &buf);
+		err = writer_index_hash(w, &w->scratch);
 		if (err < 0)
 			goto out;
 	}
 
 	if (!w->opts.skip_index_objects && reftable_ref_record_val2(ref)) {
-		reftable_buf_reset(&buf);
-		err = reftable_buf_add(&buf, reftable_ref_record_val2(ref),
+		reftable_buf_reset(&w->scratch);
+		err = reftable_buf_add(&w->scratch, reftable_ref_record_val2(ref),
 				       hash_size(w->opts.hash_id));
 		if (err < 0)
 			goto out;
 
-		err = writer_index_hash(w, &buf);
+		err = writer_index_hash(w, &w->scratch);
 		if (err < 0)
 			goto out;
 	}
@@ -365,7 +379,6 @@ int reftable_writer_add_ref(struct reftable_writer *w,
 	err = 0;
 
 out:
-	reftable_buf_release(&buf);
 	return err;
 }
 
@@ -411,6 +424,18 @@ int reftable_writer_add_log(struct reftable_writer *w,
 
 	if (log->value_type == REFTABLE_LOG_DELETION)
 		return reftable_writer_add_log_verbatim(w, log);
+
+	/*
+	 * Verify only the upper limit of the update_index. Each reflog entry
+	 * is tied to a specific update_index. Entries in the reflog can be
+	 * replaced by adding a new entry with the same update_index,
+	 * effectively canceling the old one.
+	 *
+	 * Consequently, reflog updates may include update_index values lower
+	 * than the writer's min_update_index.
+	 */
+	if (log->update_index > w->max_update_index)
+		return REFTABLE_API_ERROR;
 
 	if (!log->refname)
 		return REFTABLE_API_ERROR;

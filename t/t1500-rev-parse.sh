@@ -4,7 +4,6 @@ test_description='test git rev-parse'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 test_one () {
@@ -308,6 +307,21 @@ test_expect_success '--short= truncates to the actual hash length' '
 	git rev-parse HEAD >expect &&
 	git rev-parse --short=100 HEAD >actual &&
 	test_cmp expect actual
+'
+
+test_expect_success ':/ and HEAD^{/} favor more recent matching commits' '
+	test_when_finished "rm -rf repo" &&
+	git init repo &&
+	(
+		cd repo &&
+		test_commit common-old &&
+		test_commit --no-tag common-new &&
+		git rev-parse HEAD >expect &&
+		git rev-parse :/common >actual &&
+		test_cmp expect actual &&
+		git rev-parse HEAD^{/common} >actual &&
+		test_cmp expect actual
+	)
 '
 
 test_done

@@ -1,4 +1,5 @@
 #define USE_THE_REPOSITORY_VARIABLE
+#define DISABLE_SIGN_COMPARE_WARNINGS
 
 #include "git-compat-util.h"
 #include "object-name.h"
@@ -952,7 +953,7 @@ static int get_oid_basic(struct repository *r, const char *str, int len,
 	"\n"
 	"where \"$br\" is somehow empty and a 40-hex ref is created. Please\n"
 	"examine these refs and maybe delete them. Turn this message off by\n"
-	"running \"git config advice.objectNameWarning false\"");
+	"running \"git config set advice.objectNameWarning false\"");
 	struct object_id tmp_oid;
 	char *real_ref = NULL;
 	int refs_found = 0;
@@ -1401,7 +1402,7 @@ static int get_oid_oneline(struct repository *r,
 			   const char *prefix, struct object_id *oid,
 			   const struct commit_list *list)
 {
-	struct commit_list *copy = NULL;
+	struct commit_list *copy = NULL, **copy_tail = &copy;
 	const struct commit_list *l;
 	int found = 0;
 	int negative = 0;
@@ -1423,7 +1424,7 @@ static int get_oid_oneline(struct repository *r,
 
 	for (l = list; l; l = l->next) {
 		l->item->object.flags |= ONELINE_SEEN;
-		commit_list_insert(l->item, &copy);
+		copy_tail = &commit_list_insert(l->item, copy_tail)->next;
 	}
 	while (copy) {
 		const char *p, *buf;
@@ -1732,42 +1733,6 @@ int repo_interpret_branch_name(struct repository *r,
 	}
 
 	return -1;
-}
-
-void strbuf_branchname(struct strbuf *sb, const char *name, unsigned allowed)
-{
-	int len = strlen(name);
-	struct interpret_branch_name_options options = {
-		.allowed = allowed
-	};
-	int used = repo_interpret_branch_name(the_repository, name, len, sb,
-					      &options);
-
-	if (used < 0)
-		used = 0;
-	strbuf_add(sb, name + used, len - used);
-}
-
-int strbuf_check_branch_ref(struct strbuf *sb, const char *name)
-{
-	if (startup_info->have_repository)
-		strbuf_branchname(sb, name, INTERPRET_BRANCH_LOCAL);
-	else
-		strbuf_addstr(sb, name);
-
-	/*
-	 * This splice must be done even if we end up rejecting the
-	 * name; builtin/branch.c::copy_or_rename_branch() still wants
-	 * to see what the name expanded to so that "branch -m" can be
-	 * used as a tool to correct earlier mistakes.
-	 */
-	strbuf_splice(sb, 0, 0, "refs/heads/", 11);
-
-	if (*name == '-' ||
-	    !strcmp(sb->buf, "refs/heads/HEAD"))
-		return -1;
-
-	return check_refname_format(sb->buf, 0);
 }
 
 void object_context_release(struct object_context *ctx)

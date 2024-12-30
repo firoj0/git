@@ -2,7 +2,6 @@
 
 test_description='test the `scalar` command'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 GIT_TEST_MAINT_SCHEDULER="crontab:test-tool crontab cron.txt,launchctl:true,schtasks:true"
@@ -151,7 +150,8 @@ test_expect_success 'scalar clone' '
 			"$(pwd)" &&
 
 		git for-each-ref --format="%(refname)" refs/remotes/origin/ >actual &&
-		echo "refs/remotes/origin/parallel" >expect &&
+		echo "refs/remotes/origin/HEAD" >>expect &&
+		echo "refs/remotes/origin/parallel" >>expect &&
 		test_cmp expect actual &&
 
 		test_path_is_missing 1/2 &&
@@ -220,7 +220,7 @@ test_expect_success 'scalar reconfigure --all with includeIf.onbranch' '
 	done
 '
 
- test_expect_success 'scalar reconfigure --all with detached HEADs' '
+test_expect_success 'scalar reconfigure --all with detached HEADs' '
 	repos="two three four" &&
 	for num in $repos
 	do

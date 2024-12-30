@@ -8,7 +8,6 @@ test_description='Test git-bundle'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 . "$TEST_DIRECTORY"/lib-bundle.sh
 . "$TEST_DIRECTORY"/lib-terminal.sh
@@ -502,6 +501,50 @@ test_expect_success 'unfiltered bundle with --objects' '
 	# Compare the headers of these files.
 	sed -n -e "/^$/q" -e "p" all.bdl >expect &&
 	sed -n -e "/^$/q" -e "p" all-objects.bdl >actual &&
+	test_cmp expect actual
+'
+
+test_expect_success 'full bundle upto annotated tag' '
+	git bundle create v2.bdl \
+		v2 &&
+
+	git bundle verify v2.bdl |
+		make_user_friendly_and_stable_output >actual &&
+
+	format_and_save_expect <<-EOF &&
+	The bundle contains this ref:
+	<TAG-2> refs/tags/v2
+	The bundle records a complete history.
+	$HASH_MESSAGE
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'clone from full bundle upto annotated tag' '
+	git clone --mirror v2.bdl tag-clone.git &&
+	git -C tag-clone.git show-ref |
+		make_user_friendly_and_stable_output >actual &&
+	cat >expect <<-\EOF &&
+	<TAG-2> refs/tags/v2
+	EOF
+	test_cmp expect actual
+'
+
+test_expect_success 'incremental bundle between two annotated tags' '
+	git bundle create v1-v2.bdl \
+		v1..v2 &&
+
+	git bundle verify v1-v2.bdl |
+		make_user_friendly_and_stable_output >actual &&
+
+	format_and_save_expect <<-EOF &&
+	The bundle contains this ref:
+	<TAG-2> refs/tags/v2
+	The bundle requires these 2 refs:
+	<COMMIT-E> Z
+	<COMMIT-B> Z
+	$HASH_MESSAGE
+	EOF
 	test_cmp expect actual
 '
 

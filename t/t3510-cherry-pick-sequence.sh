@@ -12,7 +12,6 @@ test_description='Test cherry-pick continuation features
 
 '
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 # Repeat first match 10 times
@@ -26,7 +25,7 @@ pristine_detach () {
 }
 
 test_expect_success setup '
-	git config advice.detachedhead false &&
+	git config set advice.detachedhead false &&
 	echo unrelated >unrelated &&
 	git add unrelated &&
 	test_commit initial foo a &&

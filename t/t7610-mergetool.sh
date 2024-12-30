@@ -10,7 +10,6 @@ Testing basic merge tool invocation'
 GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME=main
 export GIT_TEST_DEFAULT_INITIAL_BRANCH_NAME
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 # All the mergetool test work by checking out a temporary branch based
@@ -897,6 +896,14 @@ test_expect_success 'mergetool with guiDefault' '
 	echo "branch1 submodule" >expect &&
 	test_cmp expect submod/bar &&
 	git commit -m "branch1 resolved with mergetool"
+'
+
+test_expect_success 'mergetool with non-existent tool' '
+	test_when_finished "git reset --hard" &&
+	git checkout -b test$test_count branch1 &&
+	test_must_fail git merge main &&
+	yes "" | test_must_fail git mergetool --tool=absent >out 2>&1 &&
+	test_grep "mergetool.absent.cmd not set for tool" out
 '
 
 test_done

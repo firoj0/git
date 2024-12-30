@@ -3,6 +3,8 @@
 
 #include "gettext.h"
 
+struct repository;
+
 /**
  * Refer to Documentation/technical/api-parse-options.txt for the API doc.
  */
@@ -73,7 +75,7 @@ typedef enum parse_opt_result parse_opt_ll_cb(struct parse_opt_ctx_t *ctx,
 					      const char *arg, int unset);
 
 typedef int parse_opt_subcommand_fn(int argc, const char **argv,
-				    const char *prefix);
+				    const char *prefix, struct repository *repo);
 
 /*
  * `type`::
@@ -348,6 +350,18 @@ struct option {
 	.long_name = (l), \
 	.help = N_("no-op (backward compatibility)"), \
 	.flags = PARSE_OPT_HIDDEN | PARSE_OPT_NOARG, \
+	.callback = parse_opt_noop_cb, \
+}
+
+static char *parse_options_noop_ignored_value MAYBE_UNUSED;
+#define OPT_NOOP_ARG(s, l) { \
+	.type = OPTION_CALLBACK, \
+	.short_name = (s), \
+	.long_name = (l), \
+	.value = &parse_options_noop_ignored_value, \
+	.argh = "ignored", \
+	.help = N_("no-op (backward compatibility)"), \
+	.flags = PARSE_OPT_HIDDEN, \
 	.callback = parse_opt_noop_cb, \
 }
 

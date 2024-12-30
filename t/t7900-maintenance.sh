@@ -2,7 +2,6 @@
 
 test_description='git maintenance builtin'
 
-TEST_PASSES_SANITIZE_LEAK=true
 . ./test-lib.sh
 
 GIT_TEST_COMMIT_GRAPH=0
@@ -329,7 +328,8 @@ test_expect_success 'incremental-repack task' '
 
 	# Delete refs that have not been repacked in these packs.
 	git for-each-ref --format="delete %(refname)" \
-		refs/prefetch refs/tags refs/remotes >refs &&
+		refs/prefetch refs/tags refs/remotes \
+		--exclude=refs/remotes/*/HEAD >refs &&
 	git update-ref --stdin <refs &&
 
 	# Replace the object directory with this pack layout.
@@ -1009,6 +1009,19 @@ test_expect_success 'repacking loose objects is quiet' '
 		git maintenance run --quiet >out 2>&1 &&
 		test_must_be_empty out
 	)
+'
+
+test_expect_success 'maintenance aborts with existing lock file' '
+	test_when_finished "rm -rf repo script" &&
+	mkdir script &&
+	write_script script/systemctl <<-\EOF &&
+	true
+	EOF
+
+	git init repo &&
+	: >repo/.git/objects/schedule.lock &&
+	test_must_fail env PATH="$PWD/script:$PATH" git -C repo maintenance start --scheduler=systemd 2>err &&
+	test_grep "Another scheduled git-maintenance(1) process seems to be running" err
 '
 
 test_done

@@ -1,5 +1,5 @@
 package Git::I18N;
-use 5.008001;
+require v5.26;
 use strict;
 use warnings $ENV{GIT_PERL_FATAL_WARNINGS} ? qw(FATAL all) : ();
 BEGIN {
@@ -20,14 +20,14 @@ our @EXPORT_OK = @EXPORT;
 # this "'@@' [...] '@@'" pattern.
 use constant NO_GETTEXT_STR => '@@' . 'NO_GETTEXT' . '@@';
 use constant NO_GETTEXT => (
-	q[@@NO_GETTEXT@@] ne ''
+	q[@NO_GETTEXT@] ne ''
 	and
-	q[@@NO_GETTEXT@@] ne NO_GETTEXT_STR
+	q[@NO_GETTEXT@] ne NO_GETTEXT_STR
 );
 
 sub __bootstrap_locale_messages {
 	our $TEXTDOMAIN = 'git';
-	our $TEXTDOMAINDIR ||= $ENV{GIT_TEXTDOMAINDIR} || '@@LOCALEDIR@@';
+	our $TEXTDOMAINDIR ||= $ENV{GIT_TEXTDOMAINDIR} || '@LOCALEDIR@';
 	die "NO_GETTEXT=" . NO_GETTEXT_STR if NO_GETTEXT;
 
 	require POSIX;
