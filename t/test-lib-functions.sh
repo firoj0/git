@@ -927,7 +927,7 @@ test_expect_success () {
 		test -n "$test_skip_test_preamble" ||
 		say >&3 "expecting success of $TEST_NUMBER.$test_count '$1': $test_body"
 		if test_run_ "$test_body" &&
-		   check_test_results_san_file_empty_
+		   ! check_test_results_san_file_has_entries_
 		then
 			test_ok_ "$1"
 		else
@@ -1266,6 +1266,16 @@ test_expect_code () {
 test_cmp () {
 	test "$#" -ne 2 && BUG "2 param"
 	eval "$GIT_TEST_CMP" '"$@"'
+}
+
+# test_cmp_sorted runs test_cmp on sorted versions of the two
+# input files. Uses "$1.sorted" and "$2.sorted" as temp files.
+
+test_cmp_sorted () {
+	sort <"$1" >"$1.sorted" &&
+	sort <"$2" >"$2.sorted" &&
+	test_cmp "$1.sorted" "$2.sorted" &&
+	rm "$1.sorted" "$2.sorted"
 }
 
 # Check that the given config key has the expected value.
@@ -1877,6 +1887,32 @@ test_subcommand () {
 
 	local expr="$(printf '"%s",' "$@")"
 	expr="${expr%,}"
+
+	if test -n "$negate"
+	then
+		! grep "\[$expr\]"
+	else
+		grep "\[$expr\]"
+	fi
+}
+
+# Check that the given subcommand was run with the given set of
+# arguments in order (but with possible extra arguments).
+#
+#	test_subcommand_flex [!] <command> <args>... < <trace>
+#
+# If the first parameter passed is !, this instead checks that
+# the given command was not called.
+#
+test_subcommand_flex () {
+	local negate=
+	if test "$1" = "!"
+	then
+		negate=t
+		shift
+	fi
+
+	local expr="$(printf '"%s".*' "$@")"
 
 	if test -n "$negate"
 	then

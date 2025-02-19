@@ -224,8 +224,37 @@ do
 			test_commit --date "100003000 +0700" --no-tag -C repo second &&
 			test_migration repo "$to_format"
 		'
+
+		test_expect_success "$from_format -> $to_format: stash is retained" '
+			test_when_finished "rm -rf repo" &&
+			git init --ref-format=$from_format repo &&
+			(
+				cd repo &&
+				test_commit initial A &&
+				echo foo >A &&
+				git stash push &&
+				echo bar >A &&
+				git stash push &&
+				git stash list >expect.reflog &&
+				test_migration . "$to_format" &&
+				git stash list >actual.reflog &&
+				test_cmp expect.reflog actual.reflog
+			)
+		'
 	done
 done
+
+test_expect_success 'multiple reftable blocks with multiple entries' '
+	test_when_finished "rm -rf repo" &&
+	git init --ref-format=files repo &&
+	test_commit -C repo first &&
+	printf "create refs/heads/ref-%d HEAD\n" $(test_seq 5000) >stdin &&
+	git -C repo update-ref --stdin <stdin &&
+	test_commit -C repo second &&
+	printf "update refs/heads/ref-%d HEAD\n" $(test_seq 3000) >stdin &&
+	git -C repo update-ref --stdin <stdin &&
+	test_migration repo reftable
+'
 
 test_expect_success 'migrating from files format deletes backend files' '
 	test_when_finished "rm -rf repo" &&
